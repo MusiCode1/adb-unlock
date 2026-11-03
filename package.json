@@ -1,0 +1,26 @@
+{
+  "name": "adb-unlock",
+  "version": "0.1.0",
+  "description": "Inject a known pattern / PIN / password into a remote Android device (ADB or SSH) to dismiss the lock screen without touching it — coordinates derived live from the accessibility tree.",
+  "type": "module",
+  "bin": { "adb-unlock": "dist/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js --banner:js='#!/usr/bin/env node'",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["android", "adb", "unlock", "pattern", "pin", "lockscreen", "uiautomator", "cli", "scrcpy"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/MusiCode1/adb-unlock.git" },
+  "homepage": "https://github.com/MusiCode1/adb-unlock#readme",
+  "bugs": { "url": "https://github.com/MusiCode1/adb-unlock/issues" },
+  "devDependencies": {
+    "@types/node": "latest",
+    "esbuild": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

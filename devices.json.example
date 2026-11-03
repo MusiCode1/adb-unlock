@@ -1,0 +1,13 @@
+{
+  "my-tablet": {
+    "transport": "adb",
+    "adb": { "serial": "10.0.0.5:5555" },
+    "via": "root",
+    "bw_item": "my-tablet"
+  },
+  "my-phone": {
+    "transport": "ssh",
+    "ssh": "my-phone-alias",
+    "via": "rish"
+  }
+}
