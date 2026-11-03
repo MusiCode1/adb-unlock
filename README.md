@@ -88,6 +88,20 @@ Path from `--devices`, or `$ADB_UNLOCK_DEVICES`, or `./devices.json`.
 `<wrap>` = `su -c` (root), `$HOME/rish -c` (Shizuku), or none — chosen by `--via`
 (default `auto`). Root is needed only for the `verify` pre-check and `--remove-lock`.
 
+## Reliability notes
+
+Raising the lock bouncer is done in a retry loop (wake → `wm dismiss-keyguard` →
+swipe up → `uiautomator dump`), because two things are flaky and device-specific:
+
+- **The swipe** that reveals the bouncer doesn't always take on the first try.
+- **`uiautomator dump`** can fail with *"could not get idle state"* on an
+  animated lock screen (clock seconds), waiting ~10s before giving up — so a
+  missed swipe is costly over a slow link. On a fast local adb it's quick.
+
+If a run fails with *"no pattern grid"*, the `(debug)` line shows which screen
+was captured; re-running usually succeeds. Rooted devices still get the
+`locksettings verify` pre-check, so a miss never costs a wrong attempt.
+
 ## Safety
 
 - Wrong pattern/PIN attempts count toward the 5-try lockout — root `locksettings verify`

@@ -76,19 +76,25 @@ const PROBE: Record<"pattern" | "text", string> = {
  *  (מה שעלול להיספר כניסיון-תבנית שגוי). משאיר dump ב-/sdcard/.au.xml ו-bouncer מוצג. */
 export function raiseLoopScript(size?: { w: number; h: number }, kind: "pattern" | "text" = "pattern"): string {
 	const x = size ? Math.round(size.w / 2) : 600;
-	const y1 = size ? Math.round(size.h * 0.8) : 1600;
+	const y1 = size ? Math.round(size.h * 0.9) : 1700;  // start near the bottom edge
 	const y2 = size ? Math.round(size.h * 0.2) : 400;
-	// dismiss-keyguard primes the bouncer (OxygenOS) but gives only a full-screen
-	// container; the swipe is what exposes the real grid. One dump/check per
-	// iteration (not two) — halves the round-trips over a slow adb-over-WG link.
+	// Two nested loops, because two independent things are flaky (both burned 2026-11-03):
+	//   outer — raising the bouncer (dismiss-keyguard primes; the swipe exposes the grid).
+	//   inner — `uiautomator dump` fails intermittently with "could not get idle state"
+	//           (animated lockscreen clock never idles); a retry a moment later succeeds.
+	// So: raise once, retry the dump until it yields the grid; if not, re-raise.
+	const probe = PROBE[kind];
 	return [
-		"for i in 1 2 3 4 5; do",
-		"  input keyevent KEYCODE_WAKEUP; sleep 0.4",
-		"  wm dismiss-keyguard; sleep 0.6",
-		`  input swipe ${x} ${y1} ${x} ${y2} 150; sleep 0.9`,
-		"  uiautomator dump /sdcard/.au.xml >/dev/null 2>&1",
-		`  grep -qiE '${PROBE[kind]}' /sdcard/.au.xml && break`,
-		"  sleep 0.3",
+		"found=0",
+		"for a in 1 2 3 4; do",
+		"  input keyevent KEYCODE_WAKEUP; sleep 0.5",
+		"  wm dismiss-keyguard; sleep 0.4",
+		`  input swipe ${x} ${y1} ${x} ${y2} 150; sleep 1.2`, // let the bouncer settle before dumping
+		"  for d in 1 2; do", // inner: just get a non-empty dump (beats the idle-state flake)
+		"    uiautomator dump /sdcard/.au.xml >/dev/null 2>&1 && [ -s /sdcard/.au.xml ] && break",
+		"    sleep 0.4",
+		"  done",
+		`  grep -qiE '${probe}' /sdcard/.au.xml 2>/dev/null && { found=1; break; }`, // grid? else outer re-raises
 		"done",
 		"",
 	].join("\n");

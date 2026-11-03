@@ -109,8 +109,9 @@ describe("raise bouncer (proportional)", () => {
 	it("scales swipe to screen size, retries, probes for the grid", () => {
 		const sc = raiseLoopScript({ w: 1272, h: 2772 }, "pattern");
 		expect(sc).toContain("wm dismiss-keyguard");
-		expect(sc).toContain("input swipe 636 2218 636 554 150");
-		expect(sc).toContain("for i in 1 2 3 4");
+		expect(sc).toContain("input swipe 636 2495 636 554 150");
+		expect(sc).toContain("for a in 1 2 3 4");  // outer raise retry
+		expect(sc).toContain("for d in 1 2");  // inner dump retry (idle-state flake)
 		expect(sc).toContain("patternview");
 	});
 	it("parseSize", () => {
