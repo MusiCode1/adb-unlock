@@ -7,20 +7,7 @@ const config = {
 	},
 	kit: {
 		adapter: adapter({ fallback: undefined, strict: true }),
-		csp: {
-			mode: 'hash',
-			directives: {
-				'default-src': ['self'],
-				'script-src': ['self'],
-				'style-src': ['self', 'unsafe-inline'],
-				'img-src': ['self', 'data:'],
-				'connect-src': ['none'],
-				'font-src': ['self'],
-				'form-action': ['none'],
-				'base-uri': ['self'],
-				'frame-ancestors': ['none']
-			}
-		}
+		paths: { base: process.env.BASE_PATH || '' }
 	}
 };
 export default config;
