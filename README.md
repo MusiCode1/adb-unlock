@@ -18,35 +18,33 @@ touchscreen is dead (`input` injects above the hardware layer).
 ## Install / run
 
 ```bash
-npx adb-unlock <device> --transport adb -s <serial>
+npx adb-unlock -s <serial> --pattern
 ```
 
+Everything is passed via flags (no positional); the default transport is **adb**.
 Requires `adb` and/or `ssh` on PATH. No install needed via `npx`.
 
 ## Usage
 
 ```bash
-# ADB, explicit serial (like `adb -s`)
-npx adb-unlock my-tablet --transport adb -s 10.0.0.5:5555
+# ADB (default), explicit serial like `adb -s`; a bare --pattern prompts hidden
+npx adb-unlock -s 10.0.0.5:5555 --pattern
 
 # ANDROID_SERIAL env (adb's native var) is honored
-ANDROID_SERIAL=10.0.0.5:5555 npx adb-unlock my-tablet --transport adb
+ANDROID_SERIAL=10.0.0.5:5555 npx adb-unlock --pattern 583
 
-# SSH transport (e.g. Termux over a VPN) — the default
-npx adb-unlock my-tablet --ssh my-tablet-alias
+# SSH transport (e.g. Termux over a VPN) — selected by --ssh
+npx adb-unlock --ssh my-tablet-alias --pin
 
-# Direct credential; a bare flag prompts hidden (not in ps/history)
-npx adb-unlock my-tablet --transport adb -s SERIAL --pattern 583
-npx adb-unlock my-tablet --transport adb -s SERIAL --pin
+# Registry entry from devices.json (also default --bw-item)
+npx adb-unlock --device my-tablet
 
 # List connected adb devices
 npx adb-unlock --list
 
-# Recon only
-npx adb-unlock my-tablet --transport adb -s SERIAL --dry-run
-
-# Remove the lock entirely (needs root)
-npx adb-unlock my-tablet --transport adb -s SERIAL --remove-lock
+# Recon only / remove the lock (needs root)
+npx adb-unlock -s SERIAL --pattern 583 --dry-run
+npx adb-unlock -s SERIAL --remove-lock
 ```
 
 ### Pattern numbering
@@ -56,10 +54,15 @@ Dots are numbered **1-9 by position**, left-to-right, top-to-bottom
 the order you drew them. The landing page converter turns a drawn pattern into this
 sequence for you.
 
-### Device selection (ADB)
+### Device selection
 
-`-s` / `--serial`, or `$ANDROID_SERIAL`. With multiple devices connected and no serial,
-the tool lists them and asks you to choose (same as `adb`).
+Everything is a flag — there is no positional argument.
+
+- **ADB (default):** `-s` / `--serial`, or `$ANDROID_SERIAL`. With multiple devices
+  connected and no serial, the tool lists them and asks you to choose (same as `adb`).
+- **SSH:** `--ssh <alias>` selects the ssh transport.
+- **Registry:** `--device <name>` looks the device up in `devices.json` (and is the
+  default `--bw-item`).
 
 ## Credential sources (in priority order)
 

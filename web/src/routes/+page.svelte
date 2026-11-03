@@ -62,7 +62,7 @@
 			resolutions and OEM skins, and even when the touchscreen is dead.
 		</p>
 		<div class="bg-(--color-surface) border border-(--color-surface-border) rounded-(--radius-card) p-4">
-			<code class="text-sm font-mono" dir="ltr">npx adb-unlock &lt;device&gt; --transport adb -s &lt;serial&gt;</code>
+			<code class="text-sm font-mono" dir="ltr">npx adb-unlock -s &lt;serial&gt; --pattern</code>
 		</div>
 		<p class="text-xs text-(--color-text-muted)">
 			Requires <code>adb</code> and/or <code>ssh</code> on PATH. For your own devices only. Wrong
@@ -153,13 +153,12 @@
 	<Card>
 		<div class="space-y-3">
 			<h2 class="text-xl font-semibold">Usage</h2>
-			<pre class="text-xs font-mono overflow-x-auto bg-(--color-surface-dim) p-3 rounded-(--radius-button)" dir="ltr">npx adb-unlock my-tablet --transport adb -s 10.0.0.5:5555
-npx adb-unlock my-tablet --transport adb --pattern        # hidden prompt
-npx adb-unlock --list                                      # connected adb devices
-ANDROID_SERIAL=10.0.0.5:5555 npx adb-unlock my-tablet --transport adb</pre>
+			<pre class="text-xs font-mono overflow-x-auto bg-(--color-surface-dim) p-3 rounded-(--radius-button)" dir="ltr">npx adb-unlock -s 10.0.0.5:5555 --pattern      # adb is the default; bare flag prompts
+npx adb-unlock --ssh my-tablet-alias --pin     # ssh transport
+npx adb-unlock --list                          # connected adb devices
+ANDROID_SERIAL=10.0.0.5:5555 npx adb-unlock --pattern 583</pre>
 			<p class="text-sm text-(--color-text-muted)">
-				Pattern dots are numbered 1-9 by position, left-to-right, top-to-bottom. Device selection
-				follows <code>adb</code>: <code>-s</code>/<code>--serial</code> or <code>$ANDROID_SERIAL</code>.
+				Pattern dots are numbered 1-9 by position, left-to-right, top-to-bottom. Device selection is all-flags and follows <code>adb</code>: <code>-s</code>/<code>--serial</code> or <code>$ANDROID_SERIAL</code> for adb, <code>--ssh</code> for ssh.
 			</p>
 		</div>
 	</Card>

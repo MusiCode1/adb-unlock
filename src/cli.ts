@@ -40,20 +40,21 @@ function loadRegistry(path?: string): Registry {
 }
 
 async function resolveCredential(
-	values: Record<string, unknown>, name: string, profile: DeviceProfile,
+	values: Record<string, unknown>, label: string, bwItem: string | undefined,
 ): Promise<{ type: CredType; value: string; source: string }> {
 	for (const t of ["pattern", "pin", "password"] as CredType[]) {
 		const v = values[t] as string | undefined;
 		if (v !== undefined) {
-			const val = v === ASK ? await promptHidden(`${t} for ${name} (hidden): `) : v;
+			const val = v === ASK ? await promptHidden(`${t} for ${label} (hidden): `) : v;
 			if (!val) die("empty credential");
 			return { type: t, value: val, source: "direct" };
 		}
 	}
-	if (!bwUnlocked()) {
-		die("bitwarden vault is locked. unlock it, or pass a credential directly with --pattern/--pin/--password.");
+	if (!bwItem) {
+		die("no credential given. pass --pattern/--pin/--password, or --bw-item/--device for Bitwarden.");
 	}
-	const fields = bwItemFields(profile.bw_item ?? name);
+	if (!bwUnlocked()) die("bitwarden vault is locked. unlock it, or pass a credential directly.");
+	const fields = bwItemFields(bwItem);
 	const r = resolveCredentialType(fields, values.type as CredType | undefined);
 	return { ...r, source: "bitwarden" };
 }
@@ -95,7 +96,7 @@ async function injectText(dev: Device, cred: string, dry: boolean): Promise<void
 
 const HELP = `adb-unlock — inject a known pattern/PIN/password into a remote Android device
 
-Usage: adb-unlock [device] [options]
+Usage: adb-unlock [options]        (everything via flags; default transport: adb)
 
 Credential (one of; a bare flag prompts hidden):
   --pattern [VALUE]   pattern as position digits 1-9 (keypad order, 1=top-left)
@@ -103,15 +104,16 @@ Credential (one of; a bare flag prompts hidden):
   --password [VALUE]  text password
   --type TYPE         when reading from Bitwarden: pattern|pin|password
 
-Transport:
-  --transport ssh|adb        default ssh
+Device / transport:
+  --transport adb|ssh        default adb (ssh is implied by --ssh)
   -s, --serial SERIAL        adb device serial (also env ANDROID_SERIAL)
-  --ssh ALIAS                ssh host alias
+  --ssh ALIAS                ssh host alias (selects ssh transport)
+  -d, --device NAME          registry key in devices.json; also default --bw-item
   --via auto|root|rish|none  shell wrapper on device (default auto)
   --list                     list connected adb devices and exit
 
 Other:
-  --bw-item NAME     Bitwarden item name (default: device name)
+  --bw-item NAME     Bitwarden item name (default: --device value)
   --devices PATH     device registry JSON (default ./devices.json or $ADB_UNLOCK_DEVICES)
   --no-verify        skip the root locksettings-verify pre-check
   --force            inject even during an active call
@@ -122,15 +124,16 @@ Other:
 Requires 'adb' and/or 'ssh' on PATH. Credential never printed; logcat cleared after.`;
 
 async function main() {
-	const { values, positionals } = parseArgs({
+	const { values } = parseArgs({
 		args: preprocess(process.argv.slice(2)),
-		allowPositionals: true,
+		allowPositionals: false,
 		options: {
 			type: { type: "string" },
 			ssh: { type: "string" },
 			via: { type: "string" },
 			transport: { type: "string" },
 			serial: { type: "string", short: "s" },
+			device: { type: "string", short: "d" },
 			"bw-item": { type: "string" },
 			devices: { type: "string" },
 			pattern: { type: "string" },
@@ -148,22 +151,27 @@ async function main() {
 	if (values.help) { console.log(HELP); return; }
 	if (values.list) { process.stdout.write(adbDevices()); return; }
 
-	const serial = (values.serial as string | undefined) ?? process.env.ANDROID_SERIAL;
-	const transport = (values.transport as Transport | undefined)
-		?? (serial ? "adb" : undefined);
-
-	const name = positionals[0] ?? serial ?? values.ssh as string ?? "";
-	if (!name && !serial) { console.log(HELP); process.exit(1); }
-
+	const deviceKey = values.device as string | undefined;
 	const registry = loadRegistry(values.devices as string | undefined);
-	const profile: DeviceProfile = { ...(registry[name] ?? {}) };
+	const profile: DeviceProfile = { ...(deviceKey ? registry[deviceKey] ?? {} : {}) };
 	if (values.ssh) profile.ssh = values.ssh as string;
 	if (values.via) profile.via = values.via as Via;
-	if (values["bw-item"]) profile.bw_item = values["bw-item"] as string;
+
+	const serial = (values.serial as string | undefined)
+		?? process.env.ANDROID_SERIAL ?? profile.adb?.serial;
+
+	// transport: explicit → profile → serial implies adb → ssh alias implies ssh → default adb
+	const effTransport: Transport =
+		(values.transport as Transport | undefined)
+		?? profile.transport
+		?? (serial ? "adb" : profile.ssh ? "ssh" : "adb");
+
+	if (effTransport === "ssh" && !profile.ssh) {
+		die("ssh transport needs an alias — pass --ssh <alias> (or --device with ssh in devices.json).");
+	}
 
 	// friendly multi-device guard for adb without an explicit serial
-	const effTransport = transport ?? profile.transport ?? "ssh";
-	if (effTransport === "adb" && !serial && !profile.adb?.serial) {
+	if (effTransport === "adb" && !serial) {
 		const devs = adbSerials().filter((d) => d.state === "device");
 		if (devs.length > 1) {
 			die("multiple adb devices connected — choose one with -s/--serial (or $ANDROID_SERIAL):\n  "
@@ -171,10 +179,13 @@ async function main() {
 		}
 	}
 
-	const { type, value: cred, source } = await resolveCredential(values, name, profile);
-	log(`device: ${name || "(adb)"}  ·  transport=${effTransport}  ·  type=${type}  ·  source=${source}`);
+	const label = deviceKey ?? serial ?? profile.ssh ?? "(adb)";
+	const bwItem = (values["bw-item"] as string | undefined) ?? profile.bw_item ?? deviceKey;
 
-	const dev = new Device(name, profile, { transport, serial });
+	const { type, value: cred, source } = await resolveCredential(values, label, bwItem);
+	log(`device: ${label}  ·  transport=${effTransport}  ·  type=${type}  ·  source=${source}`);
+
+	const dev = new Device(label, profile, { transport: effTransport, serial });
 	dev.detect();
 	log(`  root=${dev.root ? "yes" : "no"}  wrap=${dev.wrap || "none"}`);
 
