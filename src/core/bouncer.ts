@@ -78,14 +78,16 @@ export function raiseLoopScript(size?: { w: number; h: number }, kind: "pattern"
 	const x = size ? Math.round(size.w / 2) : 600;
 	const y1 = size ? Math.round(size.h * 0.8) : 1600;
 	const y2 = size ? Math.round(size.h * 0.2) : 400;
-	const check = `uiautomator dump /sdcard/.au.xml >/dev/null 2>&1; grep -qiE '${PROBE[kind]}' /sdcard/.au.xml && break`;
+	// dismiss-keyguard primes the bouncer (OxygenOS) but gives only a full-screen
+	// container; the swipe is what exposes the real grid. One dump/check per
+	// iteration (not two) — halves the round-trips over a slow adb-over-WG link.
 	return [
-		"for i in 1 2 3 4; do",
+		"for i in 1 2 3 4 5; do",
 		"  input keyevent KEYCODE_WAKEUP; sleep 0.4",
-		"  wm dismiss-keyguard; sleep 1.0",
-		`  ${check}`,
-		`  input swipe ${x} ${y1} ${x} ${y2} 150; sleep 0.8`,
-		`  ${check}`,
+		"  wm dismiss-keyguard; sleep 0.6",
+		`  input swipe ${x} ${y1} ${x} ${y2} 150; sleep 0.9`,
+		"  uiautomator dump /sdcard/.au.xml >/dev/null 2>&1",
+		`  grep -qiE '${PROBE[kind]}' /sdcard/.au.xml && break`,
 		"  sleep 0.3",
 		"done",
 		"",

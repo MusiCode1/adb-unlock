@@ -81,7 +81,13 @@ async function injectPattern(dev: Device, cred: string, dry: boolean, size: { w:
 	const raise = raiseLoopScript(size ?? undefined, "pattern");
 	const xml = dev.sh(raise + "cat /sdcard/.au.xml; rm -f /sdcard/.au.xml\n");
 	const bounds = patternGridFromDump(xml);
-	if (!bounds) die("no pattern grid in the accessibility tree (did the bouncer show? maybe the lock is not a pattern)");
+	if (!bounds) {
+		const ids = [...new Set((xml.match(/resource-id="([^"]*)"/g) ?? [])
+			.map((s) => s.slice(13, -1))
+			.filter((r) => /keyguard|pattern|lock|pin|password|bouncer/i.test(r)))].slice(0, 12);
+		log(`  (debug) dump=${xml.length}B  lock-related ids: ${ids.join(", ") || "none — bouncer not shown"}`);
+		die("no pattern grid in the accessibility tree (did the bouncer show? maybe the lock is not a pattern)");
+	}
 	const digits = parsePatternDigits(cred);
 	if (digits.length < 4) die("pattern shorter than 4 dots — probably a wrong value");
 	log(`  grid: bounds=[${bounds.join(",")}]  pattern-dots=${digits.length}`);
