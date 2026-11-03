@@ -17,3 +17,9 @@ export function parseRecon(out: string): Recon {
 	const top = /TOP=(\S*)/.exec(out)?.[1] ?? "";
 	return { keyguard: kg === "true", call: !(call === "" || call === "0"), size, top };
 }
+
+/** "1272x2772" → {w,h}. null אם לא פריק. */
+export function parseSize(size: string): { w: number; h: number } | null {
+	const m = /^(\d+)x(\d+)$/.exec(size);
+	return m ? { w: Number(m[1]), h: Number(m[2]) } : null;
+}

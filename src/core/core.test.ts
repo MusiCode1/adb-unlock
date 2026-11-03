@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
 	patternGridFromDump, patternPoints, buildPatternGesture,
-	buildTextEntry, parsePatternDigits,
+	buildTextEntry, parsePatternDigits, raiseLoopScript,
 } from "./bouncer.js";
-import { parseRecon } from "./recon.js";
+import { parseRecon, parseSize } from "./recon.js";
 import { resolveCredentialType } from "./credential.js";
 import { patternIndicesToDeviceDigits } from "./schema.js";
 import { buildInvocation, buildAdbConnect, chooseWrap } from "./transport.js";
@@ -14,14 +14,22 @@ describe("bouncer", () => {
 			.toEqual([273, 992, 926, 1645]);
 	});
 	it("grid from colorLockPatternView (OxygenOS)", () => {
-		expect(patternGridFromDump('<node resource-id="x:id/colorLockPatternView" bounds="[9,10][100,200]"/>'))
-			.toEqual([9, 10, 100, 200]);
+		expect(patternGridFromDump('<node resource-id="x:id/colorLockPatternView" bounds="[10,20][210,220]"/>'))
+			.toEqual([10, 20, 210, 220]);
 	});
 	it("grid by content-desc fallback", () => {
 		expect(patternGridFromDump('<node content-desc="אזור תבנית" bounds="[1,2][3,4]"/>')).toEqual([1, 2, 3, 4]);
 	});
 	it("no grid -> null", () => {
 		expect(patternGridFromDump('<node resource-id="x" bounds="[0,0][1,1]"/>')).toBeNull();
+	});
+	it("rejects full-screen container, prefers square grid", () => {
+		const xml = '<node resource-id="z:id/oplusos_kgd_security_pattern_view" bounds="[0,0][1272,2772]"/>'
+			+ '<node resource-id="z:id/colorLockPatternView" bounds="[200,900][900,1600]"/>';
+		expect(patternGridFromDump(xml)).toEqual([200, 900, 900, 1600]);
+	});
+	it("full-screen-only container -> null (no wrong coords)", () => {
+		expect(patternGridFromDump('<node resource-id="z:id/oplusos_kgd_security_pattern_view" bounds="[0,0][1272,2772]"/>')).toBeNull();
 	});
 	it("points row-major corners", () => {
 		const p = patternPoints([273, 992, 926, 1645]);
@@ -94,5 +102,19 @@ describe("transport", () => {
 describe("device-digits (shared with landing page)", () => {
 	it("index+1 row-major", () => {
 		expect(patternIndicesToDeviceDigits([4, 7, 2])).toBe("583");
+	});
+});
+
+describe("raise bouncer (proportional)", () => {
+	it("scales swipe to screen size, retries, probes for the grid", () => {
+		const sc = raiseLoopScript({ w: 1272, h: 2772 }, "pattern");
+		expect(sc).toContain("wm dismiss-keyguard");
+		expect(sc).toContain("input swipe 636 2218 636 554 150");
+		expect(sc).toContain("for i in 1 2 3 4");
+		expect(sc).toContain("patternview");
+	});
+	it("parseSize", () => {
+		expect(parseSize("1272x2772")).toEqual({ w: 1272, h: 2772 });
+		expect(parseSize("")).toBeNull();
 	});
 });

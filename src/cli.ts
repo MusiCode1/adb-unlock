@@ -6,9 +6,9 @@ import { readFileSync, existsSync } from "node:fs";
 
 import {
 	buildPatternGesture, buildTextEntry, parsePatternDigits,
-	patternGridFromDump, patternPoints, raiseBouncerScript,
+	patternGridFromDump, patternPoints, raiseLoopScript,
 } from "./core/bouncer.js";
-import { parseRecon, reconScript } from "./core/recon.js";
+import { parseRecon, parseSize, reconScript } from "./core/recon.js";
 import { resolveCredentialType, type CredType } from "./core/credential.js";
 import { parseRegistry, type Registry } from "./core/schema.js";
 import type { DeviceProfile, Transport, Via } from "./core/transport.js";
@@ -74,23 +74,27 @@ function removeLock(dev: Device, cred: string): boolean {
 	return chk.includes("NONE") || /success/i.test(out);
 }
 
-async function injectPattern(dev: Device, cred: string, dry: boolean): Promise<void> {
-	dev.sh(raiseBouncerScript());
-	const xml = dev.sh("uiautomator dump /sdcard/.au.xml >/dev/null 2>&1; cat /sdcard/.au.xml; rm -f /sdcard/.au.xml\n");
+// 🛑 raise + dump must share ONE device session, and raise + inject another ONE:
+// across separate ssh/adb connections the bouncer retreats in the gap (burned on
+// OxygenOS over a slow WG link). So each dev.sh() re-raises the bouncer itself.
+async function injectPattern(dev: Device, cred: string, dry: boolean, size: { w: number; h: number } | null): Promise<void> {
+	const raise = raiseLoopScript(size ?? undefined, "pattern");
+	const xml = dev.sh(raise + "cat /sdcard/.au.xml; rm -f /sdcard/.au.xml\n");
 	const bounds = patternGridFromDump(xml);
 	if (!bounds) die("no pattern grid in the accessibility tree (did the bouncer show? maybe the lock is not a pattern)");
 	const digits = parsePatternDigits(cred);
 	if (digits.length < 4) die("pattern shorter than 4 dots — probably a wrong value");
 	log(`  grid: bounds=[${bounds.join(",")}]  pattern-dots=${digits.length}`);
 	if (dry) return;
-	dev.sh(buildPatternGesture(patternPoints(bounds), digits).join("\n") + "\n");
+	// re-raise (loop) in the same session as the gesture, so the bouncer is up when it runs
+	dev.sh(raise + "rm -f /sdcard/.au.xml\n" + buildPatternGesture(patternPoints(bounds), digits).join("\n") + "\n");
 	await sleep(1000);
 }
 
-async function injectText(dev: Device, cred: string, dry: boolean): Promise<void> {
-	dev.sh(raiseBouncerScript());
-	if (dry) { log("  (dry-run: no text entered)"); return; }
-	dev.sh(buildTextEntry(cred).join("\n") + "\n");
+async function injectText(dev: Device, cred: string, dry: boolean, size: { w: number; h: number } | null): Promise<void> {
+	const raise = raiseLoopScript(size ?? undefined, "text");
+	if (dry) { dev.sh(raise + "rm -f /sdcard/.au.xml\n"); log("  (dry-run: no text entered)"); return; }
+	dev.sh(raise + "rm -f /sdcard/.au.xml\n" + buildTextEntry(cred).join("\n") + "\n");
 	await sleep(1000);
 }
 
@@ -202,8 +206,9 @@ async function main() {
 	if (values["remove-lock"] && !dev.root) die("--remove-lock needs root, none available.");
 
 	if (st.keyguard) {
-		if (type === "pattern") await injectPattern(dev, cred, !!values["dry-run"]);
-		else await injectText(dev, cred, !!values["dry-run"]);
+		const size = parseSize(st.size);
+		if (type === "pattern") await injectPattern(dev, cred, !!values["dry-run"], size);
+		else await injectText(dev, cred, !!values["dry-run"], size);
 		dev.cleanLogcat();
 		if (values["dry-run"]) { log("✓ dry-run done (nothing injected)."); return; }
 		const st2 = parseRecon(dev.sh(reconScript()));
